@@ -39,29 +39,20 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 
 
 
-
-    <!-- Load database and HTTP properties -->
-
-    <configuration-properties file="config.properties"/>
-
-
-
     <!-- MySQL Database Configuration -->
 
     <db:config name="Database_Config" doc:name="Database Config">
-        <db:my-sql-connection
-
-            host="${db.host}"
-
-            port="${db.port}"
-
-            user="${db.user}"
-
-            password="${db.password}"
-
-            database="${db.database}"/>
-
-    </db:config>
+	    <db:my-sql-connection
+	        host="${db.host}"
+	        port="${db.port}"
+	        user="${db.user}"
+	        password="${db.password}"
+	        database="${db.database}">
+	        <db:connection-properties>
+	            <db:connection-property key="sslMode" value="VERIFY_IDENTITY"/>
+	        </db:connection-properties>
+	    </db:my-sql-connection>
+	</db:config>
     
     <!-- Gmail SMTPS: implicit TLS on port 465. Use a Gmail App Password. -->
     <email:smtp-config name="Email_SMTP_Config" from="${email.username}">
@@ -1226,34 +1217,39 @@ WHERE campaign_id = :campaignId
 				    doc:name="Send"
 				    config-ref="Email_SMTP_Config"
 				    fromAddress="${email.username}"
-				    toAddresses="#[['marketing.lead@company.com']]"
+				    toAddresses="#[['rekularapusaikumar@gmail.com']]"
 				    subject="#['PREVIEW: ' ++ vars.campaign.campaign_name ++ ' - Campaign Report']">
 					<email:reply-to-addresses />
-					<email:body >
-						<email:content ><![CDATA[%dw 2.0
-output text/plain
----
-"CAMPAIGN PREVIEW REPORT\n\n" ++
-"Campaign: " ++ (vars.campaign.campaign_name default "") ++ "\n" ++
-"Campaign ID: " ++ (vars.campaign.campaign_id default "") ++ "\n" ++
-"Execution ID: " ++ (vars.executionId default "") ++ "\n\n" ++
-"Matched Customers: " ++ (vars.matchedCount as String) ++ "\n" ++
-"Eligible Messages: " ++ (vars.eligibleCount as String) ++ "\n" ++
-"Excluded Messages: " ++ (vars.excludedCount as String) ++ "\n\n" ++
-"PERSONALIZED MESSAGES\n\n" ++
-(
-    (vars.personalizedMessages default [])
-    map ((item) ->
-        "Customer: " ++ (item.customer_name default "") ++
-        "\nChannel: " ++ (item.channel default "") ++
-        "\nRecipient: " ++ (item.recipient default "") ++
-        "\nSubject: " ++ (item.subject default "") ++
-        "\nMessage: " ++ (item.message default "") ++
-        "\n------------------------------\n"
-    )
-    join "\n"
-)]]></email:content>
+					<email:body contentType="text/plain">
+					    <email:content><![CDATA[#[%dw 2.0
+							output text/plain
+							---
+							"CAMPAIGN PREVIEW REPORT\n\n" ++
+							"Campaign: " ++ (vars.campaign.campaign_name default "") ++ "\n" ++
+							"Campaign ID: " ++ (vars.campaign.campaign_id default "") ++ "\n" ++
+							"Execution ID: " ++ (vars.executionId default "") ++ "\n" ++
+							"Mode: " ++ (vars.requestMode default "PREVIEW") ++ "\n\n" ++
+							"Matched Customers: " ++ ((vars.matchedCount default 0) as String) ++ "\n" ++
+							"Eligible Messages: " ++ ((vars.eligibleCount default 0) as String) ++ "\n" ++
+							"Excluded Messages: " ++ ((vars.excludedCount default 0) as String) ++ "\n" ++
+							"Queued Messages: " ++ ((vars.queuedCount default 0) as String) ++ "\n" ++
+							"Deferred Messages: " ++ ((vars.deferredCount default 0) as String) ++ "\n\n" ++
+							"PERSONALIZED MESSAGES\n\n" ++
+							(
+							    (vars.personalizedMessages default [])
+							    map ((item) ->
+							        "Customer: " ++ (item.customer_name default "") ++
+							        "\nChannel: " ++ (item.channel default "") ++
+							        "\nRecipient: " ++ (item.recipient default "") ++
+							        "\nSubject: " ++ (item.subject default "") ++
+							        "\nMessage: " ++ (item.message default "") ++
+							        "\n----------------------------------------\n"
+							    )
+							    joinBy "\n"
+							)]]]>
+						</email:content>
 					</email:body>
+
 				</email:send>
 			</when>
 		</choice>
