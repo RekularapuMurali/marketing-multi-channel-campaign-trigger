@@ -1,0 +1,95 @@
+#%RAML 1.0
+title: Marketing Multi-Channel Campaign Trigger API
+version: v1
+baseUri: http://localhost:8081/api/v1
+mediaType: application/json
+
+types:
+  CampaignTriggerRequest:
+    type: object
+    properties:
+      mode:
+        type: string
+        enum: [DRY_RUN, PREVIEW, EXECUTE]
+        required: false
+        default: DRY_RUN
+      segmentId:
+        type: string
+        required: false
+
+  Campaign:
+    type: object
+    properties:
+      campaign_id: string
+      campaign_name: string
+      campaign_status: string
+      approved_by: string
+      approved_at: datetime
+      active_from: datetime
+      active_to: datetime
+      owner_email: string
+
+  RecipientDecision:
+    type: object
+    properties:
+      customer_id: string
+      channel:
+        type: string
+        enum: [EMAIL, SMS, PUSH]
+      address: string
+      outcome:
+        type: string
+        enum: [ELIGIBLE, EXCLUDED]
+      exclusion_reason:
+        type: string | nil
+
+  CampaignTriggerResponse:
+    type: object
+    properties:
+      executionId: string
+      campaign: Campaign
+      mode: string
+      matchedCount: integer
+      eligibleCount: integer
+      excludedCount: integer
+      recipientDecisions:
+        type: array
+        items: RecipientDecision
+
+/db-test:
+  /campaigns:
+    /{campaignId}:
+      get:
+        description: Retrieve campaign details by campaign ID (database connectivity test).
+        responses:
+          200:
+            body:
+              application/json:
+                type: Campaign
+          404:
+            description: Campaign not found.
+
+/campaigns:
+  /{campaignId}:
+    /trigger:
+      post:
+        description: Validate a campaign and evaluate its multi-channel recipients.
+        headers:
+          idempotency-key:
+            type: string
+            required: true
+            maxLength: 60
+        body:
+          application/json:
+            type: CampaignTriggerRequest
+        responses:
+          200:
+            body:
+              application/json:
+                type: CampaignTriggerResponse
+          400:
+            description: Invalid request or execution mode.
+          404:
+            description: Campaign not found.
+          409:
+            description: Duplicate campaign execution.

@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core
+        http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/db
+        http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+        http://www.mulesoft.org/schema/mule/munit
+        http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools
+        http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+    <munit:config name="marketing-campaign-trigger-test-suite"/>
+
+    <!-- Test 1: Invalid mode must be rejected -->
+    <munit:test
+        name="invalid-mode-should-raise-error"
+        description="Verify invalid execution mode is rejected"
+        expectedErrorType="APP:INVALID_MODE">
+
+        <munit:execution>
+            <set-payload value="#[{mode: 'INVALID'}]"/>
+            <flow-ref name="trigger-campaign"/>
+        </munit:execution>
+    </munit:test>
+
+    <!-- Test 2: Valid mode with a missing campaign -->
+    <munit:test
+        name="missing-campaign-should-raise-error"
+        description="Verify valid mode passes validation and missing campaign is rejected"
+        expectedErrorType="APP:CAMPAIGN_NOT_FOUND">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute
+                        attributeName="config-ref"
+                        whereValue="#['Database_Config']"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[[]]"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[{mode: 'DRY_RUN'}]"/>
+                <munit:attributes value="#[{uriParams: {campaignId: 'UNKNOWN-CAMPAIGN'}}]"/>
+            </munit:set-event>
+
+            <flow-ref name="trigger-campaign"/>
+        </munit:execution>
+    </munit:test>
+
+
+    <!-- Test 3: DRY_RUN must never publish to a VM queue -->
+    <munit:test
+        name="dry-run-should-not-publish-vm-messages"
+        description="Verify DRY_RUN completes without publishing campaign messages">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[{mode: 'DRY_RUN'}]"/>
+                <munit:attributes value="#[{uriParams: {campaignId: 'CMP-2026-0918'}, headers: {}}]"/>
+            </munit:set-event>
+            <set-variable variableName="requestIdempotencyKey"
+                          value="#['MUNIT-DRYRUN-' ++ (uuid() as String)]"/>
+            <flow-ref name="trigger-campaign"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- Test 4: PREVIEW sends only the lead report and publishes no campaign messages -->
+    <munit:test
+        name="preview-should-email-lead-without-vm-publishing"
+        description="Verify PREVIEW invokes the lead email report and does not publish VM messages">
+
+        <munit:behavior>
+            <!-- Prevent a real SMTP email during the automated test. -->
+            <munit-tools:mock-when processor="email:send">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute
+                        attributeName="config-ref"
+                        whereValue="#['Email_SMTP_Config']"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{}]"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[{mode: 'PREVIEW'}]"/>
+                <munit:attributes value="#[{uriParams: {campaignId: 'CMP-2026-0918'}, headers: {}}]"/>
+            </munit:set-event>
+            <set-variable
+                variableName="requestIdempotencyKey"
+                value="#['MUNIT-PREVIEW-' ++ (uuid() as String)]"/>
+            <flow-ref name="trigger-campaign"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:verify-call processor="email:send" times="1"/>
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+    
+        <!-- Test 5: Duplicate execution must be rejected -->
+    <munit:test
+        name="duplicate-execution-should-be-rejected"
+        description="Verify an already-used idempotency key cannot execute twice"
+        expectedErrorType="APP:DUPLICATE_EXECUTION">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[{mode: 'EXECUTE'}]"/>
+                <munit:attributes value="#[{uriParams: {campaignId: 'CMP-2026-0918'}, headers: {}}]"/>
+            </munit:set-event>
+
+            <set-variable
+                variableName="requestIdempotencyKey"
+                value="#['EXECUTE-001']"/>
+
+            <flow-ref name="trigger-campaign"/>
+        </munit:execution>
+
+    </munit:test>
+    
+    
+        <!-- Test 6: DRY_RUN must report excluded recipients -->
+    <munit:test
+        name="dry-run-should-report-excluded-recipients"
+        description="Verify excluded recipients are counted during DRY_RUN">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload value="#[{mode: 'DRY_RUN'}]"/>
+                <munit:attributes value="#[{uriParams: {campaignId: 'CMP-2026-0918'}, headers: {}}]"/>
+            </munit:set-event>
+
+            <set-variable
+                variableName="requestIdempotencyKey"
+                value="#['MUNIT-EXCLUSION-' ++ (uuid() as String)]"/>
+
+            <flow-ref name="trigger-campaign"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+			    expression="#[read(payload, 'application/json').excludedCount as Number]"
+			    is="#[MunitTools::greaterThan(0)]"
+			    message="Expected at least one excluded recipient"/>
+
+            <munit-tools:verify-call
+                processor="vm:publish"
+                times="0"/>
+        </munit:validation>
+
+    </munit:test>
+
+</mule>

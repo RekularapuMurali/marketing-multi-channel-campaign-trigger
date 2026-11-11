@@ -1,0 +1,1454 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+
+<mule 
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+    xmlns:email="http://www.mulesoft.org/schema/mule/email"
+    xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+
+      
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd 
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+	    http://www.mulesoft.org/schema/mule/core
+	    http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+	    http://www.mulesoft.org/schema/mule/db
+	    http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+	    http://www.mulesoft.org/schema/mule/http
+	    http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+	    http://www.mulesoft.org/schema/mule/mule-apikit
+	    http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+
+
+
+    <!-- Load database and HTTP properties -->
+
+    <configuration-properties file="config.properties"/>
+
+
+
+    <!-- MySQL Database Configuration -->
+
+    <db:config name="Database_Config" doc:name="Database Config">
+        <db:my-sql-connection
+
+            host="${db.host}"
+
+            port="${db.port}"
+
+            user="${db.user}"
+
+            password="${db.password}"
+
+            database="${db.database}"/>
+
+    </db:config>
+    
+    <!-- Gmail SMTPS: implicit TLS on port 465. Use a Gmail App Password. -->
+    <email:smtp-config name="Email_SMTP_Config" from="${email.username}">
+    <email:smtps-connection
+        host="smtp.gmail.com"
+        port="465"
+        user="${email.username}"
+        password="${email.password}">
+        <tls:context enabledProtocols="TLSv1.2">
+            <tls:trust-store/>
+        </tls:context>
+    </email:smtps-connection>
+	</email:smtp-config>
+
+    <!-- Local asynchronous queues for channel-specific campaign messages -->
+    <vm:config name="VM_Config" doc:name="VM Config">
+        <vm:connection/>
+        <vm:queues>
+            <vm:queue queueName="campaign.email.queue" queueType="TRANSIENT"/>
+            <vm:queue queueName="campaign.sms.queue" queueType="TRANSIENT"/>
+            <vm:queue queueName="campaign.push.queue" queueType="TRANSIENT"/>
+        </vm:queues>
+    </vm:config>
+
+
+
+    <!-- HTTP Listener Configuration -->
+
+    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener Config">
+
+        <http:listener-connection host="0.0.0.0" port="${http.port}"/>
+
+    </http:listener-config>
+
+
+
+    <!-- APIkit configuration: map RAML resources to the existing implementation flows -->
+
+    <apikit:config name="api-config"
+
+                   api="api/marketing-campaign-trigger.raml"
+
+                   parser="RAML"
+
+                   outboundHeadersMapName="outboundHeaders"
+
+                   httpStatusVarName="httpStatus">
+
+        <apikit:flow-mappings>
+
+            <apikit:flow-mapping resource="/db-test/campaigns/{campaignId}"
+
+                                 action="get"
+
+                                 flow-ref="get-campaign-by-id"/>
+
+            <apikit:flow-mapping resource="/campaigns/{campaignId}/trigger"
+
+                                 action="post"
+
+                                 flow-ref="trigger-campaign"/>
+
+        </apikit:flow-mappings>
+
+    </apikit:config>
+
+
+
+    <!-- Single HTTP entry point. APIkit validates and routes requests using the RAML contract. -->
+
+	<flow name="api-main">
+
+        <http:listener config-ref="HTTP_Listener_config" path="/api/v1/*">
+
+            <http:response statusCode="#[vars.httpStatus default 200]">
+
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+
+            </http:response>
+
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+
+                <http:body>#[payload]</http:body>
+
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+
+            </http:error-response>
+
+        </http:listener>
+
+        <logger
+
+		    level="INFO"
+
+		    message="#['LISTENER ATTRIBUTES: ' ++ write(attributes, 'application/json')]"/>
+
+		<set-variable
+		    variableName="requestIdempotencyKey"
+		    value="#[attributes.headers.'idempotency-key' default null]"
+		    doc:name="requestIdempotencyKey"/>
+
+        <apikit:router config-ref="api-config"/>
+
+		        <error-handler>
+
+
+
+				<on-error-propagate type="APP:DUPLICATE_EXECUTION">
+                    <set-variable variableName="httpStatus" value="409"/>
+                    <set-payload
+                        value="#[write({message: 'Duplicate campaign execution', detail: error.description}, 'application/json')]"
+                        mimeType="application/json"/>
+                </on-error-propagate>
+
+		    <on-error-propagate type="APP:CAMPAIGN_ALREADY_RUNNING">
+                    <set-variable variableName="httpStatus" value="409"/>
+                    <set-payload
+                        value="#[write({message: 'Campaign already running', detail: error.description}, 'application/json')]"
+                        mimeType="application/json"/>
+                </on-error-propagate>
+
+                <on-error-propagate type="APIKIT:BAD_REQUEST">
+
+		        <set-variable variableName="httpStatus" value="400"/>
+
+		        <set-payload value="#[{message: error.description}]"
+
+		                     mimeType="application/json"/>
+
+		    </on-error-propagate>
+
+
+
+		    <on-error-propagate type="APIKIT:NOT_FOUND">
+
+		        <set-variable variableName="httpStatus" value="404"/>
+
+		        <set-payload value="#[{message: 'Resource not found'}]"
+
+		                     mimeType="application/json"/>
+
+		    </on-error-propagate>
+
+
+
+		    <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+
+		        <set-variable variableName="httpStatus" value="405"/>
+
+		        <set-payload value="#[{message: 'Method not allowed'}]"
+
+		                     mimeType="application/json"/>
+
+		    </on-error-propagate>
+
+		            <on-error-propagate type="APP:INVALID_MODE">
+                <set-variable variableName="httpStatus" value="400"/>
+                <set-payload value="#[{message: error.description}]" mimeType="application/json"/>
+            </on-error-propagate>
+            <on-error-propagate type="APP:CAMPAIGN_NOT_FOUND">
+                <set-variable variableName="httpStatus" value="404"/>
+                <set-payload value="#[{message: error.description}]" mimeType="application/json"/>
+            </on-error-propagate>
+            <on-error-propagate type="APP:CAMPAIGN_NOT_APPROVED">
+                <set-variable variableName="httpStatus" value="409"/>
+                <set-payload value="#[{message: error.description}]" mimeType="application/json"/>
+            </on-error-propagate>
+            <on-error-propagate type="APP:CAMPAIGN_INACTIVE">
+                <set-variable variableName="httpStatus" value="409"/>
+                <set-payload value="#[{message: error.description}]" mimeType="application/json"/>
+            </on-error-propagate>
+            <on-error-propagate type="ANY">
+                <set-variable variableName="httpStatus" value="500"/>
+                <set-payload value="#[{message: 'Campaign trigger failed', detail: error.description}]" mimeType="application/json"/>
+            </on-error-propagate>
+        </error-handler>
+
+    </flow>
+
+
+
+    <!-- GET: Retrieve Campaign Details -->
+
+    <flow name="get-campaign-by-id">
+
+        <db:select config-ref="Database_Config">
+
+            <db:sql><![CDATA[
+
+                SELECT
+
+                    campaign_id,
+
+                    campaign_name,
+
+                    campaign_status,
+
+                    approved_by,
+
+                    approved_at,
+
+                    active_from,
+
+                    active_to,
+
+                    owner_email
+
+                FROM campaigns
+
+                WHERE campaign_id = :campaignId
+
+            ]]></db:sql>
+
+            <db:input-parameters><![CDATA[
+
+                #[{
+
+                    campaignId: attributes.uriParams.campaignId
+                }]
+
+            ]]></db:input-parameters>
+
+        </db:select>
+
+
+
+        <set-payload
+
+            value="#[write(payload, 'application/json')]"
+
+            mimeType="application/json"/>
+
+    </flow>
+
+
+
+    <!-- POST: Trigger Marketing Campaign -->
+
+    <flow name="trigger-campaign">
+
+
+
+        <!-- 1. Read and validate execution mode -->
+
+        <set-variable
+		    variableName="requestMode"
+		    value="#[upper((payload.mode default 'DRY_RUN') as String)]"
+		    doc:name="requestMode"/>
+
+
+
+		<choice>
+
+            <when expression="#[vars.requestMode != 'DRY_RUN' and vars.requestMode != 'PREVIEW' and vars.requestMode != 'EXECUTE']">
+
+                <raise-error
+
+                    type="APP:INVALID_MODE"
+
+                    description="Mode must be DRY_RUN, PREVIEW, or EXECUTE"/>
+
+            </when>
+
+        </choice>
+
+
+
+        <!-- 3. Retrieve campaign -->
+
+        <db:select config-ref="Database_Config">
+
+            <db:sql><![CDATA[
+
+                SELECT
+
+                    campaign_id,
+
+                    campaign_name,
+
+                    campaign_status,
+
+                    approved_by,
+
+                    approved_at,
+
+                    active_from,
+
+                    active_to,
+
+                    owner_email
+
+                FROM campaigns
+
+                WHERE campaign_id = :campaignId
+
+            ]]></db:sql>
+
+            
+<db:input-parameters><![CDATA[#[{
+    campaignId: attributes.uriParams.campaignId
+}]]]></db:input-parameters>
+
+
+        </db:select>
+
+
+
+        <!-- 4. Validate campaign -->
+
+
+
+
+
+        <choice>
+
+            <when expression="#[isEmpty(payload)]">
+
+                <raise-error
+
+                    type="APP:CAMPAIGN_NOT_FOUND"
+
+                    description="Campaign does not exist"/>
+
+            </when>
+
+            <when expression="#[payload[0].campaign_status != 'APPROVED']">
+
+                <raise-error
+
+                    type="APP:CAMPAIGN_NOT_APPROVED"
+
+                    description="Campaign is not approved"/>
+
+            </when>
+
+            <when expression="#[now() &lt; payload[0].active_from or now() > payload[0].active_to]">
+
+                <raise-error
+
+                    type="APP:CAMPAIGN_INACTIVE"
+
+                    description="Campaign is outside its active date range"/>
+
+            </when>
+
+        </choice>
+
+
+
+        <!-- Preserve the validated campaign before running another DB operation -->
+
+        <set-variable
+
+            variableName="campaign"
+
+            value="#[payload[0]]" doc:name="Campaign"/>
+
+
+
+        <!-- 5. Generate execution ID and idempotency key -->
+
+        <!-- EXEC- plus 20 characters = 25 characters, fitting VARCHAR(30) -->
+
+        <set-variable
+		    variableName="executionId"
+		    value="#['EXEC-' ++ ((uuid() as String) replace '-' with '')[0 to 19]]"
+		    doc:name="executionId"/>
+
+
+
+        <set-variable
+		    variableName="idempotencyKey"
+		    value="#[vars.requestIdempotencyKey default vars.executionId]"
+		    doc:name="idempotencyKey"/>
+
+		<logger
+
+		    level="INFO"
+
+		    message="#['ALL REQUEST HEADERS: ' ++ write(attributes.headers, 'application/json')]"/>
+
+		<logger
+		    level="INFO"
+		    message="#['IDEMPOTENCY KEY RECEIVED: ' ++ (vars.idempotencyKey as String)]"
+		    doc:name="Log Idempotency Key"/>
+
+
+
+         <!-- Check whether this campaign and idempotency key were already processed -->
+
+		<db:select config-ref="Database_Config">
+
+		    <db:sql><![CDATA[
+
+		        SELECT execution_id, execution_status,
+
+		               matched_count, eligible_count, excluded_count
+
+		        FROM campaign_executions
+
+		        WHERE campaign_id = :campaignId
+
+		          AND idempotency_key = :idempotencyKey
+
+		        LIMIT 1
+
+		    ]]></db:sql>
+
+		    <db:input-parameters><![CDATA[
+
+		        #[{
+
+		            campaignId: vars.campaign.campaign_id,
+
+		            idempotencyKey: vars.idempotencyKey
+
+		        }]
+
+		    ]]></db:input-parameters>
+
+		</db:select>
+
+
+
+		<choice>
+
+		    <when expression="#[!isEmpty(payload)]">
+
+		        <raise-error
+
+		            type="APP:DUPLICATE_EXECUTION"
+
+		            description="This campaign has already been triggered with the supplied idempotency key."/>
+
+		    </when>
+
+		</choice>
+
+
+
+
+
+        <!-- Atomic campaign-wide lock: campaign_id is the lock table primary key. -->
+        <db:insert config-ref="Database_Config" doc:name="Acquire Campaign Lock">
+            <db:sql><![CDATA[
+                INSERT IGNORE INTO campaign_execution_locks
+                    (campaign_id, execution_id, idempotency_key, locked_at)
+                VALUES
+                    (:campaignId, :executionId, :idempotencyKey, CURRENT_TIMESTAMP)
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+                campaignId: vars.campaign.campaign_id,
+                executionId: vars.executionId,
+                idempotencyKey: vars.idempotencyKey
+            }]]]></db:input-parameters>
+        </db:insert>
+
+        <db:select config-ref="Database_Config" doc:name="Verify Campaign Lock Ownership">
+            <db:sql><![CDATA[
+                SELECT execution_id
+                FROM campaign_execution_locks
+                WHERE campaign_id = :campaignId
+                  AND execution_id = :executionId
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+                campaignId: vars.campaign.campaign_id,
+                executionId: vars.executionId
+            }]]]></db:input-parameters>
+        </db:select>
+
+        <choice doc:name="Check Campaign Lock">
+            <when expression="#[isEmpty(payload)]">
+                <raise-error
+                    type="APP:CAMPAIGN_ALREADY_RUNNING"
+                    description="Another execution is already processing this campaign. Retry after it finishes."/>
+            </when>
+        </choice>
+
+        <try doc:name="Execute Campaign and Release Lock">
+        <!-- 6. Insert campaign execution -->
+
+        <db:insert config-ref="Database_Config">
+
+            <db:sql><![CDATA[
+
+                INSERT INTO campaign_executions (
+
+                    execution_id,
+
+                    campaign_id,
+
+                    idempotency_key,
+
+                    execution_mode,
+
+                    matched_count,
+
+                    eligible_count,
+
+                    excluded_count,
+
+                    queued_count,
+
+                    deferred_count,
+
+                    execution_status,
+
+                    triggered_by,
+
+                    started_at,
+
+                    correlation_id
+
+                )
+
+                VALUES (
+
+                    :executionId,
+
+                    :campaignId,
+
+                    :idempotencyKey,
+
+                    :executionMode,
+
+                    0,
+
+                    0,
+
+                    0,
+
+                    0,
+
+                    0,
+
+                    'EVALUATING',
+
+                    :triggeredBy,
+
+                    CURRENT_TIMESTAMP,
+
+                    :correlationId
+
+                )
+
+            ]]></db:sql>
+
+            <db:input-parameters><![CDATA[
+
+                #[{
+
+                    executionId: vars.executionId,
+
+                    campaignId: vars.campaign.campaign_id,
+
+                    idempotencyKey: vars.idempotencyKey,
+
+                    executionMode: vars.requestMode,
+
+                    triggeredBy: 'marketing.user',
+
+                    correlationId: correlationId
+
+                }]
+
+            ]]></db:input-parameters>
+
+        </db:insert>
+
+
+
+        <!-- 7. Retrieve active customers, valid consent, suppression and contact history -->
+
+        <db:select config-ref="Database_Config">
+
+            <db:sql><![CDATA[
+
+                SELECT
+
+                    c.customer_id,
+
+                    c.customer_name,
+
+                    c.email,
+
+                    c.phone,
+
+                    c.push_token,
+
+                    c.timezone,
+
+
+
+                    EXISTS (
+
+                        SELECT 1
+
+                        FROM customer_consents cc
+
+                        WHERE cc.customer_id = c.customer_id
+
+                          AND cc.channel = 'EMAIL'
+
+                          AND cc.consent_given = TRUE
+
+                          AND cc.withdrawn_at IS NULL
+
+                          AND (
+
+                              cc.expires_at IS NULL
+
+                              OR cc.expires_at > CURRENT_TIMESTAMP
+
+                          )
+
+                    ) AS email_consent,
+
+
+
+                    EXISTS (
+
+                        SELECT 1
+
+                        FROM customer_consents cc
+
+                        WHERE cc.customer_id = c.customer_id
+
+                          AND cc.channel = 'SMS'
+
+                          AND cc.consent_given = TRUE
+
+                          AND cc.withdrawn_at IS NULL
+
+                          AND (
+
+                              cc.expires_at IS NULL
+
+                              OR cc.expires_at > CURRENT_TIMESTAMP
+
+                          )
+
+                    ) AS sms_consent,
+
+
+
+                    EXISTS (
+
+                        SELECT 1
+
+                        FROM customer_consents cc
+
+                        WHERE cc.customer_id = c.customer_id
+
+                          AND cc.channel = 'PUSH'
+
+                          AND cc.consent_given = TRUE
+
+                          AND cc.withdrawn_at IS NULL
+
+                          AND (
+
+                              cc.expires_at IS NULL
+
+                              OR cc.expires_at > CURRENT_TIMESTAMP
+
+                          )
+
+                    ) AS push_consent,
+
+
+
+                    EXISTS (
+
+                        SELECT 1
+
+                        FROM suppression_list s
+
+                        WHERE s.channel = 'EMAIL'
+
+                          AND s.address_hash = LOWER(SHA2(TRIM(c.email), 256))
+
+                    ) AS email_suppressed,
+
+
+
+                    (
+
+                        SELECT COUNT(*)
+
+                        FROM customer_contact_history h
+
+                        WHERE h.customer_id = c.customer_id
+
+                          AND h.channel = 'EMAIL'
+
+                          AND h.contacted_at >= NOW() - INTERVAL 7 DAY
+
+                    ) AS recent_email_count,
+
+
+
+                    (
+
+                        SELECT COUNT(*)
+
+                        FROM customer_contact_history h
+
+                        WHERE h.customer_id = c.customer_id
+
+                          AND h.channel = 'SMS'
+
+                          AND h.contacted_at >= NOW() - INTERVAL 7 DAY
+
+                    ) AS recent_sms_count,
+
+
+
+                    (
+
+                        SELECT COUNT(*)
+
+                        FROM customer_contact_history h
+
+                        WHERE h.customer_id = c.customer_id
+
+                          AND h.channel = 'PUSH'
+
+                          AND h.contacted_at >= NOW() - INTERVAL 7 DAY
+
+                    ) AS recent_push_count
+
+
+
+                FROM customers c
+
+                WHERE c.customer_status = 'ACTIVE'
+
+            ]]></db:sql>
+
+        </db:select>
+
+
+
+        <!-- Preserve matched customer count before recipient processing -->
+
+        <set-variable
+		    variableName="customerRecords"
+		    value="#[payload]"
+		    doc:name="Store Customer Records"/>
+		<logger
+		    level="INFO"
+		    message="#['CUSTOMERS TYPE: ' ++ typeOf(vars.customerRecords) ++ ', COUNT: ' ++ sizeOf(vars.customerRecords)]"
+		    doc:name="Verify Customers"/>
+
+		<set-variable
+
+            variableName="matchedCount"
+
+            value="#[sizeOf(vars.customerRecords default [])]" doc:name="matchedCount"/>
+
+
+
+        <!-- 8. Calculate channel-wise eligibility -->
+
+        <!-- MySQL EXISTS values were observed as 1/0 in the current test output -->
+
+
+			<set-variable
+			    variableName="recipientDecisions"
+			    value="#[
+			        vars.customerRecords flatMap (c) -> [
+			            {
+			                customer_id: c.customer_id,
+			                channel: 'EMAIL',
+			                address: c.email,
+			                outcome:
+			                    if (
+			                        c.email_consent == 1
+			                        and c.email_suppressed == 0
+			                        and c.recent_email_count == 0
+			                    )
+			                        'ELIGIBLE'
+			                    else
+			                        'EXCLUDED',
+			                exclusion_reason:
+			                    if (c.email_consent != 1)
+			                        'NO_CONSENT'
+			                    else if (c.email_suppressed == 1)
+			                        'SUPPRESSED'
+			                    else if (c.recent_email_count > 0)
+			                        'RECENT_CONTACT'
+			                    else
+			                        null
+			            },
+			            {
+			                customer_id: c.customer_id,
+			                channel: 'SMS',
+			                address: c.phone,
+			                outcome:
+			                    if (
+			                        c.sms_consent == 1
+			                        and c.recent_sms_count == 0
+			                    )
+			                        'ELIGIBLE'
+			                    else
+			                        'EXCLUDED',
+			                exclusion_reason:
+			                    if (c.sms_consent != 1)
+			                        'NO_CONSENT'
+			                    else if (c.recent_sms_count > 0)
+			                        'RECENT_CONTACT'
+			                    else
+			                        null
+			            },
+			            {
+			                customer_id: c.customer_id,
+			                channel: 'PUSH',
+			                address: c.push_token,
+			                outcome:
+			                    if (
+			                        c.push_consent == 1
+			                        and c.recent_push_count == 0
+			                    )
+			                        'ELIGIBLE'
+			                    else
+			                        'EXCLUDED',
+			                exclusion_reason:
+			                    if (c.push_consent != 1)
+			                        'NO_CONSENT'
+			                    else if (c.recent_push_count > 0)
+			                        'RECENT_CONTACT'
+			                    else
+			                        null
+			            }
+			        ]
+			    ]"
+			    doc:name="recipientDecisions"/>
+
+
+        <!-- 9. Calculate summary counts -->
+
+        <set-variable
+
+            variableName="eligibleCount"
+
+            value="#[sizeOf(vars.recipientDecisions filter ($.outcome == 'ELIGIBLE'))]" doc:name="eligibleCount"/>
+
+
+
+        <set-variable
+
+            variableName="excludedCount"
+
+            value="#[sizeOf(vars.recipientDecisions filter ($.outcome == 'EXCLUDED'))]" doc:name="excludedCount"/>
+
+
+
+        <!-- 10. Insert one audit row for every customer/channel decision -->
+
+        <foreach collection="#[vars.recipientDecisions]">
+
+            <db:insert config-ref="Database_Config">
+
+                <db:sql><![CDATA[
+
+                    INSERT INTO campaign_recipient_log (
+
+                        execution_id,
+
+                        campaign_id,
+
+                        customer_id,
+
+                        channel,
+
+                        masked_address,
+
+                        outcome,
+
+                        exclusion_reason,
+
+                        idempotency_key
+
+                    )
+
+                    VALUES (
+
+                        :executionId,
+
+                        :campaignId,
+
+                        :customerId,
+
+                        :channel,
+
+                        :maskedAddress,
+
+                        :outcome,
+
+                        :exclusionReason,
+
+                        :idempotencyKey
+
+                    )
+
+                ]]></db:sql>
+
+                <db:input-parameters><![CDATA[
+
+                    #[{
+
+                        executionId: vars.executionId,
+
+                        campaignId: vars.campaign.campaign_id,
+
+                        customerId: payload.customer_id,
+
+                        channel: payload.channel,
+
+                        maskedAddress: '***',
+
+                        outcome: payload.outcome,
+
+                        exclusionReason: payload.exclusion_reason,
+
+                        idempotencyKey:
+
+                            vars.idempotencyKey
+
+                            ++ '-'
+
+                            ++ payload.customer_id
+
+                            ++ '-'
+
+                            ++ payload.channel
+
+                    }]
+
+                ]]></db:input-parameters>
+
+            </db:insert>
+
+        </foreach>
+
+
+
+        <!-- 11. Update execution only after recipient audit inserts finish -->
+
+        <db:update config-ref="Database_Config">
+
+            <db:sql><![CDATA[
+
+                UPDATE campaign_executions
+
+                SET matched_count = :matchedCount,
+
+                    eligible_count = :eligibleCount,
+
+                    excluded_count = :excludedCount,
+
+                    execution_status = 'EVALUATED',
+
+                    completed_at = CURRENT_TIMESTAMP
+
+                WHERE execution_id = :executionId
+
+            ]]></db:sql>
+
+            <db:input-parameters><![CDATA[
+
+                #[{
+
+                    matchedCount: vars.matchedCount,
+
+                    eligibleCount: vars.eligibleCount,
+
+                    excludedCount: vars.excludedCount,
+
+                    executionId: vars.executionId
+
+                }]
+
+            ]]></db:input-parameters>
+
+        </db:update>
+
+
+
+        <!-- 12. Return complete evaluation response -->
+
+        <db:select doc:name="Select" doc:id="2cdb9b86-9c2c-4aa5-8c80-f5719c8c1990" config-ref="Database_Config">
+
+			<db:sql ><![CDATA[SELECT
+
+    template_id,
+
+    campaign_id,
+
+    channel,
+
+    subject,
+
+    message_body
+
+FROM campaign_templates
+
+WHERE campaign_id = :campaignId
+
+  AND is_active = TRUE;]]></db:sql>
+
+			<db:input-parameters ><![CDATA[#[{
+
+    campaignId: vars.campaign.campaign_id
+
+}]]]></db:input-parameters>
+
+		</db:select>
+
+		<set-variable
+    value="#[payload]"
+    doc:name="campaignTemplates"
+    variableName="campaignTemplates"/>
+
+		
+		<set-variable
+		    doc:name="personalizedMessages"
+		    variableName="personalizedMessages"
+		    value="#[
+		        (vars.recipientDecisions filter ($.outcome == 'ELIGIBLE'))
+		        flatMap (decision) -> do {
+		            var customer = (vars.customerRecords filter
+		                ($.customer_id == decision.customer_id))[0] default {}
+		
+		            var template = (vars.campaignTemplates filter
+		                ($.channel == decision.channel))[0] default {}
+		
+		            var offer = '10% off'
+		            var timezone = customer.timezone default 'UTC'
+		            var localNow = now() >> timezone
+		            var minuteOfDay = (localNow.hour * 60) + localNow.minutes
+		            var startMinute = 9 * 60
+		            var endMinute = 21 * 60
+		            var deferred = minuteOfDay &lt; startMinute or minuteOfDay >= endMinute
+		            var minutesUntilAllowed =
+		                if (minuteOfDay &lt; startMinute)
+		                    startMinute - minuteOfDay
+		                else
+		                    (24 * 60 - minuteOfDay) + startMinute
+		            var sendAt =
+		                if (deferred)
+		                    now() + (minutesUntilAllowed * |PT1M|)
+		                else
+		                    now()
+		
+		            var personalizedBody =
+		                ((template.message_body default '')
+		                    replace /\{\{customer_name\}\}/ with (customer.customer_name default 'Customer'))
+		                    replace /\{\{campaign_name\}\}/ with (vars.campaign.campaign_name default 'Campaign')
+		                    replace /\{\{offer\}\}/ with offer
+		
+		            var personalizedSubject =
+		                ((template.subject default '')
+		                    replace /\{\{customer_name\}\}/ with (customer.customer_name default 'Customer'))
+		                    replace /\{\{campaign_name\}\}/ with (vars.campaign.campaign_name default 'Campaign')
+		                    replace /\{\{offer\}\}/ with offer
+		
+		            ---
+		            if (!isEmpty(template))
+		            [{
+		                customer_id: decision.customer_id,
+		                customer_name: customer.customer_name,
+		                timeZone: timezone,
+		                channel: decision.channel,
+		                recipient:
+		                    if (decision.channel == 'EMAIL') customer.email
+		                    else if (decision.channel == 'SMS') customer.phone
+		                    else customer.push_token,
+		                subject: personalizedSubject,
+		                message: personalizedBody,
+		                deferred: deferred,
+		                scheduledSendAt: sendAt,
+		                status: if (deferred) 'DEFERRED' else 'PERSONALIZED'
+		            }]
+		            else []
+		        }
+		    ]"/>
+		    
+		    
+			<set-variable
+			    variableName="deferredCount"
+			    doc:name="Set Deferred Count"
+			    value="#[sizeOf(vars.personalizedMessages filter ($.deferred == true))]"/>
+					    
+
+		<choice doc:name="Mode Dispatch">
+            <when expression="#[vars.requestMode == 'EXECUTE']">
+                <!-- Persist every personalized message. The scheduler publishes it only when due. -->
+                <foreach collection="#[vars.personalizedMessages default []]">
+                    <db:insert config-ref="Database_Config" doc:name="Persist Scheduled Campaign Message">
+                        <db:sql><![CDATA[
+                            INSERT INTO campaign_scheduled_messages
+                                (execution_id, campaign_id, customer_id, channel,
+                                 idempotency_key, scheduled_send_at, message_payload, status)
+                            VALUES
+                                (:executionId, :campaignId, :customerId, :channel,
+                                 :messageKey, :scheduledSendAt, :messagePayload, 'PENDING')
+                        ]]></db:sql>
+                        <db:input-parameters><![CDATA[#[{
+                            executionId: vars.executionId,
+                            campaignId: vars.campaign.campaign_id,
+                            customerId: payload.customer_id,
+                            channel: payload.channel,
+                            messageKey: vars.idempotencyKey ++ '-' ++ payload.customer_id ++ '-' ++ payload.channel,
+                            scheduledSendAt: (payload.scheduledSendAt >> "UTC") as LocalDateTime,
+                            messagePayload: write({
+                                correlationId: vars.executionId,
+                                eventType: 'CAMPAIGN_MESSAGE',
+                                idempotencyKey: vars.idempotencyKey ++ '-' ++ payload.customer_id ++ '-' ++ payload.channel,
+                                executionId: vars.executionId,
+                                campaignId: vars.campaign.campaign_id,
+                                channel: payload.channel,
+                                scheduledSendAt: payload.scheduledSendAt,
+                                recipient: {
+                                    customerId: payload.customer_id,
+                                    address: payload.recipient,
+                                    timeZone: payload.timeZone default 'UTC'
+                                },
+                                message: {
+                                    customerName: payload.customer_name,
+                                    subject: payload.subject,
+                                    body: payload.message
+                                }
+                            }, 'application/json')
+                        }]]]></db:input-parameters>
+                    </db:insert>
+                </foreach>
+
+                <set-variable
+                    variableName="queuedCount"
+                    value="#[sizeOf(vars.personalizedMessages default [])]"
+                    doc:name="Set Queued Count"/>
+
+                <db:update config-ref="Database_Config" doc:name="Update Queued and Deferred Execution">
+                    <db:sql><![CDATA[
+                        UPDATE campaign_executions
+                        SET queued_count = :queuedCount,
+                            deferred_count = :deferredCount,
+                            execution_status = 'QUEUED',
+                            completed_at = CURRENT_TIMESTAMP
+                        WHERE execution_id = :executionId
+                    ]]></db:sql>
+                    <db:input-parameters><![CDATA[#[{
+                        queuedCount: vars.queuedCount,
+                        deferredCount: vars.deferredCount,
+                        executionId: vars.executionId
+                    }]]]></db:input-parameters>
+                </db:update>
+            </when>
+            <when expression="#[vars.requestMode == 'PREVIEW']">
+				<email:send
+				    doc:name="Send"
+				    config-ref="Email_SMTP_Config"
+				    fromAddress="${email.username}"
+				    toAddresses="#[['marketing.lead@company.com']]"
+				    subject="#['PREVIEW: ' ++ vars.campaign.campaign_name ++ ' - Campaign Report']">
+					<email:reply-to-addresses />
+					<email:body >
+						<email:content ><![CDATA[%dw 2.0
+output text/plain
+---
+"CAMPAIGN PREVIEW REPORT\n\n" ++
+"Campaign: " ++ (vars.campaign.campaign_name default "") ++ "\n" ++
+"Campaign ID: " ++ (vars.campaign.campaign_id default "") ++ "\n" ++
+"Execution ID: " ++ (vars.executionId default "") ++ "\n\n" ++
+"Matched Customers: " ++ (vars.matchedCount as String) ++ "\n" ++
+"Eligible Messages: " ++ (vars.eligibleCount as String) ++ "\n" ++
+"Excluded Messages: " ++ (vars.excludedCount as String) ++ "\n\n" ++
+"PERSONALIZED MESSAGES\n\n" ++
+(
+    (vars.personalizedMessages default [])
+    map ((item) ->
+        "Customer: " ++ (item.customer_name default "") ++
+        "\nChannel: " ++ (item.channel default "") ++
+        "\nRecipient: " ++ (item.recipient default "") ++
+        "\nSubject: " ++ (item.subject default "") ++
+        "\nMessage: " ++ (item.message default "") ++
+        "\n------------------------------\n"
+    )
+    join "\n"
+)]]></email:content>
+					</email:body>
+				</email:send>
+			</when>
+		</choice>
+		<ee:transform doc:name="Transform Message" doc:id="4f0b6b7a-aef3-46df-a799-2152c2087f6c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+					output application/json
+					---
+					{
+					    executionId: vars.executionId,
+					    campaignId: vars.campaign.campaign_id,
+					    campaignName: vars.campaign.campaign_name,
+					    mode: vars.requestMode,
+					    matchedCount: vars.matchedCount,
+					    eligibleCount: vars.eligibleCount,
+						excludedCount: vars.excludedCount,
+						queuedCount: vars.queuedCount default 0,
+						deferredCount: vars.deferredCount default 0,
+						recipientDecisions: vars.recipientDecisions,
+					    personalizedMessages: vars.personalizedMessages
+					}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+        
+
+            <error-handler>
+                <on-error-propagate type="ANY" doc:name="Release Lock on Error">
+                    <db:delete config-ref="Database_Config" doc:name="Release Campaign Lock After Error">
+                        <db:sql><![CDATA[
+                            DELETE FROM campaign_execution_locks
+                            WHERE campaign_id = :campaignId
+                              AND execution_id = :executionId
+                        ]]></db:sql>
+                        <db:input-parameters><![CDATA[#[{
+                            campaignId: vars.campaign.campaign_id,
+                            executionId: vars.executionId
+                        }]]]></db:input-parameters>
+                    </db:delete>
+                </on-error-propagate>
+            </error-handler>
+        </try>
+
+        <db:delete config-ref="Database_Config" doc:name="Release Campaign Lock After Success">
+            <db:sql><![CDATA[
+                DELETE FROM campaign_execution_locks
+                WHERE campaign_id = :campaignId
+                  AND execution_id = :executionId
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+                campaignId: vars.campaign.campaign_id,
+                executionId: vars.executionId
+            }]]]></db:input-parameters>
+        </db:delete>
+        <set-payload
+            doc:name="Build Final JSON Response"
+            mimeType="application/json"
+            value="#[write({
+                executionId: vars.executionId,
+                campaignId: vars.campaign.campaign_id,
+                campaignName: vars.campaign.campaign_name,
+                mode: vars.requestMode,
+                matchedCount: vars.matchedCount,
+                eligibleCount: vars.eligibleCount,
+                excludedCount: vars.excludedCount,
+                queuedCount: vars.queuedCount default 0,
+                deferredCount: vars.deferredCount default 0,
+                recipientDecisions: vars.recipientDecisions,
+                personalizedMessages: vars.personalizedMessages
+            }, 'application/json')]"/>
+
+
+		
+    
+</flow>
+
+    <!-- Poll the durable database queue and publish only messages whose scheduled time is due. -->
+    <flow name="scheduled-campaign-message-dispatcher">
+        <scheduler doc:name="Scheduled Message Poller">
+            <scheduling-strategy>
+                <fixed-frequency frequency="30" timeUnit="SECONDS"/>
+            </scheduling-strategy>
+        </scheduler>
+        <set-variable variableName="claimToken" value="#['CLAIM-' ++ ((uuid() as String) replace '-' with '')]"/>
+        
+        <db:update config-ref="Database_Config"
+           doc:name="Recover Stale Message Claims">
+    	<db:sql><![CDATA[
+		        UPDATE campaign_scheduled_messages
+		        SET status = 'PENDING',
+		            claim_token = NULL,
+		            claimed_at = NULL
+		        WHERE status = 'PROCESSING'
+		          AND claimed_at IS NOT NULL
+		          AND claimed_at <= UTC_TIMESTAMP() - INTERVAL 10 MINUTE
+		    ]]></db:sql>
+		</db:update>
+
+        <!-- Atomic batch claim: concurrent scheduler instances select only their own token. -->
+        <db:update config-ref="Database_Config" doc:name="Claim Due Scheduled Messages">
+            <db:sql><![CDATA[
+                UPDATE campaign_scheduled_messages
+                SET status = 'PROCESSING',
+				    claim_token = :claimToken,
+				    claimed_at = UTC_TIMESTAMP()
+	            WHERE status = 'PENDING'
+                  AND scheduled_send_at <= UTC_TIMESTAMP()
+                ORDER BY scheduled_send_at, id
+                LIMIT 50
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{ claimToken: vars.claimToken }]]]></db:input-parameters>
+        </db:update>
+        <db:select config-ref="Database_Config" doc:name="Read Claimed Messages">
+            <db:sql><![CDATA[
+                SELECT id, channel, CAST(message_payload AS CHAR) AS message_payload
+                FROM campaign_scheduled_messages
+                WHERE status = 'PROCESSING'
+                  AND claim_token = :claimToken
+                ORDER BY scheduled_send_at, id
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{ claimToken: vars.claimToken }]]]></db:input-parameters>
+        </db:select>
+        <foreach collection="#[payload default []]">
+            <set-variable variableName="scheduledRow" value="#[payload]"/>
+            <vm:publish
+                doc:name="Publish Due Campaign Message"
+                config-ref="VM_Config"
+                queueName="#[if (vars.scheduledRow.channel == 'EMAIL') 'campaign.email.queue' else if (vars.scheduledRow.channel == 'SMS') 'campaign.sms.queue' else 'campaign.push.queue']">
+                <vm:content><![CDATA[#[read(vars.scheduledRow.message_payload, 'application/json')]]]></vm:content>
+            </vm:publish>
+            <db:update config-ref="Database_Config" doc:name="Mark Scheduled Message Published">
+                <db:sql><![CDATA[
+                    UPDATE campaign_scheduled_messages
+						SET status = 'PUBLISHED',
+						    published_at = CURRENT_TIMESTAMP,
+						    claim_token = NULL,
+						    claimed_at = NULL
+						WHERE id = :messageId
+						  AND status = 'PROCESSING'
+						  AND claim_token = :claimToken
+                ]]></db:sql>
+                <db:input-parameters><![CDATA[#[{
+                    messageId: vars.scheduledRow.id,
+                    claimToken: vars.claimToken
+                }]]]></db:input-parameters>
+            </db:update>
+        </foreach>
+        <error-handler>
+            <on-error-continue type="ANY" doc:name="Release Unpublished Claims">
+                <db:update config-ref="Database_Config" doc:name="Return Unpublished Messages to Pending">
+                    <db:sql><![CDATA[
+                        UPDATE campaign_scheduled_messages
+					SET status = 'PENDING',
+					    claim_token = NULL,
+					    claimed_at = NULL
+					WHERE status = 'PROCESSING'
+					  AND claim_token = :claimToken
+                    ]]></db:sql>
+                    <db:input-parameters><![CDATA[#[{ claimToken: vars.claimToken }]]]></db:input-parameters>
+                </db:update>
+                <logger level="ERROR" message="#[ 'Scheduled message dispatch failed; unprocessed claims returned to PENDING. claimToken=' ++ (vars.claimToken default 'unknown') ++ ', error=' ++ (error.description default 'unknown') ]"/>
+            </on-error-continue>
+        </error-handler>
+    </flow>
+
+    <!-- VM queue consumers: consume messages and log non-sensitive routing metadata.
+         These are validation consumers; they do not yet send real customer messages. -->
+    <flow name="consume-email-campaign-queue">
+        <vm:listener config-ref="VM_Config" queueName="campaign.email.queue"/>
+        <logger level="INFO" message="#[ 'EMAIL queue message consumed. executionId=' ++ (payload.executionId default 'unknown') ++ ', campaignId=' ++ (payload.campaignId default 'unknown') ++ ', channel=' ++ (payload.channel default 'unknown') ]"/>
+    </flow>
+
+    <flow name="consume-sms-campaign-queue">
+        <vm:listener config-ref="VM_Config" queueName="campaign.sms.queue"/>
+        <logger level="INFO" message="#[ 'SMS queue message consumed. executionId=' ++ (payload.executionId default 'unknown') ++ ', campaignId=' ++ (payload.campaignId default 'unknown') ++ ', channel=' ++ (payload.channel default 'unknown') ]"/>
+    </flow>
+
+    <flow name="consume-push-campaign-queue">
+        <vm:listener config-ref="VM_Config" queueName="campaign.push.queue"/>
+        <logger level="INFO" message="#[ 'PUSH queue message consumed. executionId=' ++ (payload.executionId default 'unknown') ++ ', campaignId=' ++ (payload.campaignId default 'unknown') ++ ', channel=' ++ (payload.channel default 'unknown') ]"/>
+    </flow>
+
+    <flow name="api-console">
+
+	    <http:listener
+
+	        config-ref="HTTP_Listener_config"
+
+	        path="/console/*">
+
+	        <http:response statusCode="200"/>
+
+	    </http:listener>
+
+	    <apikit:console config-ref="api-config"/>
+
+	</flow>
+
+</mule>
