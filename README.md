@@ -1,4 +1,4 @@
-\# Marketing Multi-Channel Campaign Trigger
+# Marketing Multi-Channel Campaign Trigger
 
 
 
@@ -6,11 +6,11 @@ A MuleSoft-based campaign management and orchestration application that evaluate
 
 
 
-\## Project Overview
+## Project Overview
 
 
 
-The \*\*Marketing Multi-Channel Campaign Trigger\*\* automates the process of triggering marketing campaigns across Email, SMS, and Push Notification channels.
+The **Marketing Multi-Channel Campaign Trigger** automates the process of triggering marketing campaigns across Email, SMS, and Push Notification channels.
 
 
 
@@ -18,39 +18,39 @@ The application retrieves campaign and customer information from a relational da
 
 
 
-It supports three execution modes: `DRY\_RUN`, `PREVIEW`, and `EXECUTE`.
+It supports three execution modes: `DRY_RUN`, `PREVIEW`, and `EXECUTE`.
 
 
 
-\## Key Features
+## Key Features
 
 
 
-\- \*\*REST API Integration:\*\* Exposes campaign management and trigger endpoints using MuleSoft HTTP Listener and APIKit.
+- **REST API Integration:** Exposes campaign management and trigger endpoints using MuleSoft HTTP Listener and APIKit.
 
-\- \*\*Campaign Validation:\*\* Validates campaign information and approval status before processing.
+- **Campaign Validation:** Validates campaign information and approval status before processing.
 
-\- \*\*Customer Eligibility:\*\* Evaluates customer consent, suppression lists, and recent contact history.
+- **Customer Eligibility:** Evaluates customer consent, suppression lists, and recent contact history.
 
-\- \*\*Multi-Channel Support:\*\* Supports Email, SMS, and Push Notification message preparation.
+- **Multi-Channel Support:** Supports Email, SMS, and Push Notification message preparation.
 
-\- \*\*Message Personalization:\*\* Generates personalized messages based on customer and campaign information.
+- **Message Personalization:** Generates personalized messages based on customer and campaign information.
 
-\- \*\*Execution Modes:\*\* Supports DRY\_RUN, PREVIEW, and EXECUTE operations.
+- **Execution Modes:** Supports DRY_RUN, PREVIEW, and EXECUTE operations.
 
-\- \*\*Idempotency:\*\* Uses an idempotency key to prevent duplicate campaign execution requests.
+- **Idempotency:** Uses an idempotency key to prevent duplicate campaign execution requests.
 
-\- \*\*Database Integration:\*\* Stores campaign execution details, recipient decisions, and scheduled messages.
+- **Database Integration:** Stores campaign execution details, recipient decisions, and scheduled messages.
 
-\- \*\*Scheduled Processing:\*\* Uses a scheduler to identify due messages and publish them to internal message queues.
+- **Scheduled Processing:** Uses a scheduler to identify due messages and publish them to internal message queues.
 
-\- \*\*Email Preview Report:\*\* Sends campaign preview reports to the configured marketing contact through SMTP.
+- **Email Preview Report:** Sends campaign preview reports to the configured marketing contact through SMTP.
 
-\- \*\*Audit and Tracking:\*\* Maintains execution status, eligibility decisions, and message processing records.
+- **Audit and Tracking:** Maintains execution status, eligibility decisions, and message processing records.
 
 
 
-\## Technology Stack
+## Technology Stack
 
 
 
@@ -84,163 +84,163 @@ It supports three execution modes: `DRY\_RUN`, `PREVIEW`, and `EXECUTE`.
 
 
 
-\## System Architecture
+## System Architecture
 
 
 
 ```text
 
-&#x20;            Client / PowerShell
+             Client / PowerShell
 
-&#x20;                    |
+                     |
 
-&#x20;                    v
+                     v
 
-&#x20;              HTTP Listener
+               HTTP Listener
 
-&#x20;                    |
+                     |
 
-&#x20;                    v
+                     v
 
-&#x20;              APIKit Router
+               APIKit Router
 
-&#x20;                    |
+                     |
 
-&#x20;                    v
+                     v
 
-&#x20;           Campaign Trigger Flow
+            Campaign Trigger Flow
 
-&#x20;                    |
+                     |
 
-&#x20;         +----------+----------+
+          +----------+----------+
 
-&#x20;         |                     |
+          |                     |
 
-&#x20;         v                     v
+          v                     v
 
-&#x20;   Database Layer        DataWeave
+    Database Layer        DataWeave
 
-&#x20;         |                     |
+          |                     |
 
-&#x20;         v                     v
+          v                     v
 
-&#x20;Campaign / Customer     Eligibility Evaluation
+ Campaign / Customer     Eligibility Evaluation
 
-&#x20;Consent / Suppression   Message Personalization
+ Consent / Suppression   Message Personalization
 
-&#x20;Contact History                |
+ Contact History                |
 
-&#x20;         |                     |
+          |                     |
 
-&#x20;         +----------+----------+
+          +----------+----------+
 
-&#x20;                    |
+                     |
 
-&#x20;                    v
+                     v
 
-&#x20;             Execution Modes
+              Execution Modes
 
-&#x20;                    |
+                     |
 
-&#x20;         +----------+----------+
+          +----------+----------+
 
-&#x20;         |          |          |
+          |          |          |
 
-&#x20;         v          v          v
+          v          v          v
 
-&#x20;       DRY\_RUN    PREVIEW    EXECUTE
+        DRY_RUN    PREVIEW    EXECUTE
 
-&#x20;                    |          |
+                     |          |
 
-&#x20;                    v          v
+                     v          v
 
-&#x20;               SMTP Report  Scheduled Messages
+                SMTP Report  Scheduled Messages
 
-&#x20;                               |
+                                |
 
-&#x20;                               v
+                                v
 
-&#x20;                          Scheduler
+                           Scheduler
 
-&#x20;                               |
+                                |
 
-&#x20;                               v
+                                v
 
-&#x20;                         Internal VM Queues
+                          Internal VM Queues
 
-&#x20;                               |
+                                |
 
-&#x20;                               v
+                                v
 
-&#x20;                        Queue Consumers
+                         Queue Consumers
 
 ```
 
 
 
-\## Execution Modes
+## Execution Modes
 
 
 
-\### 1. DRY\_RUN
+### 1. DRY_RUN
 
 
 
-\- Evaluates the campaign without performing a live execution.
+- Evaluates the campaign without performing a live execution.
 
-\- Checks customer eligibility.
+- Checks customer eligibility.
 
-\- Identifies excluded customers and exclusion reasons.
+- Identifies excluded customers and exclusion reasons.
 
-\- Generates execution statistics.
+- Generates execution statistics.
 
-\- Helps validate campaign configuration before execution.
-
-
-
-\### 2. PREVIEW
+- Helps validate campaign configuration before execution.
 
 
 
-\- Performs campaign eligibility evaluation.
-
-\- Generates personalized messages for eligible customers.
-
-\- Produces a campaign preview report.
-
-\- Sends the preview report to the configured marketing contact through SMTP.
-
-\- Does not perform actual customer-channel delivery.
+### 2. PREVIEW
 
 
 
-\### 3. EXECUTE
+- Performs campaign eligibility evaluation.
+
+- Generates personalized messages for eligible customers.
+
+- Produces a campaign preview report.
+
+- Sends the preview report to the configured marketing contact through SMTP.
+
+- Does not perform actual customer-channel delivery.
 
 
 
-\- Creates a campaign execution record.
-
-\- Generates personalized messages.
-
-\- Creates scheduled message records in the database.
-
-\- Uses a scheduler to identify messages that are due.
-
-\- Publishes due messages to internal VM queues.
-
-\- Tracks message processing status.
+### 3. EXECUTE
 
 
 
-\*\*Implementation note:\*\* The current SMS and Push queue consumers, and the internal queue processing flow, are used for message logging and processing demonstration. Actual external SMS and Push delivery integrations are not implemented. Customer email delivery is also not currently implemented as a live campaign-delivery flow. The SMTP integration is used for preview reporting.
+- Creates a campaign execution record.
+
+- Generates personalized messages.
+
+- Creates scheduled message records in the database.
+
+- Uses a scheduler to identify messages that are due.
+
+- Publishes due messages to internal VM queues.
+
+- Tracks message processing status.
 
 
 
-\## API Endpoints
+**Implementation note:** The current SMS and Push queue consumers, and the internal queue processing flow, are used for message logging and processing demonstration. Actual external SMS and Push delivery integrations are not implemented. Customer email delivery is also not currently implemented as a live campaign-delivery flow. The SMTP integration is used for preview reporting.
 
 
 
-\*\*Base URL (CloudHub 2.0):\*\*
+## API Endpoints
+
+
+
+**Base URL (CloudHub 2.0):**
 
 
 
@@ -252,7 +252,7 @@ https://marketing-campaign-trigger-cv0iri.5sc6y6-3.usa-e2.cloudhub.io
 
 
 
-\*\*Base Path:\*\*
+**Base Path:**
 
 
 
@@ -264,7 +264,7 @@ https://marketing-campaign-trigger-cv0iri.5sc6y6-3.usa-e2.cloudhub.io
 
 
 
-\### 1. Get Campaign Details
+### 1. Get Campaign Details
 
 
 
@@ -294,7 +294,7 @@ GET /api/v1/db-test/campaigns/CMP-2026-0918
 
 
 
-\### 2. Trigger Campaign
+### 2. Trigger Campaign
 
 
 
@@ -336,7 +336,7 @@ Request body:
 
 {
 
-&#x20; "mode": "DRY\_RUN"
+  "mode": "DRY_RUN"
 
 }
 
@@ -350,7 +350,7 @@ Supported modes:
 
 ```text
 
-DRY\_RUN
+DRY_RUN
 
 PREVIEW
 
@@ -360,11 +360,11 @@ EXECUTE
 
 
 
-\*\*Important:\*\* Supply a new unique `Idempotency-Key` for each new execution request. Reusing an existing key prevents duplicate execution.
+**Important:** Supply a new unique `Idempotency-Key` for each new execution request. Reusing an existing key prevents duplicate execution.
 
 
 
-\## Database Design
+## Database Design
 
 
 
@@ -384,25 +384,25 @@ Important tables include:
 
 | `customers` | Stores customer information |
 
-| `customer\_consents` | Maintains channel-specific customer consent |
+| `customer_consents` | Maintains channel-specific customer consent |
 
-| `suppression\_list` | Stores customers excluded from campaigns |
+| `suppression_list` | Stores customers excluded from campaigns |
 
-| `customer\_contact\_history` | Tracks previous customer communications |
+| `customer_contact_history` | Tracks previous customer communications |
 
-| `campaign\_executions` | Maintains campaign execution records |
+| `campaign_executions` | Maintains campaign execution records |
 
-| `campaign\_recipient\_log` | Records recipient eligibility decisions |
+| `campaign_recipient_log` | Records recipient eligibility decisions |
 
-| `campaign\_scheduled\_messages` | Stores scheduled personalized messages |
+| `campaign_scheduled_messages` | Stores scheduled personalized messages |
 
-| `campaign\_templates` | Stores campaign message templates |
+| `campaign_templates` | Stores campaign message templates |
 
-| `campaign\_execution\_locks` | Supports execution locking |
+| `campaign_execution_locks` | Supports execution locking |
 
 
 
-\### Eligibility Evaluation
+### Eligibility Evaluation
 
 
 
@@ -410,13 +410,13 @@ The application evaluates customers using business rules such as:
 
 
 
-\- Customer channel consent.
+- Customer channel consent.
 
-\- Suppression list membership.
+- Suppression list membership.
 
-\- Recent contact history.
+- Recent contact history.
 
-\- Campaign approval and validity.
+- Campaign approval and validity.
 
 
 
@@ -424,9 +424,9 @@ Customers are classified as:
 
 
 
-\- `ELIGIBLE` – Customer satisfies the applicable campaign rules.
+- `ELIGIBLE` – Customer satisfies the applicable campaign rules.
 
-\- `EXCLUDED` – Customer does not satisfy one or more eligibility rules.
+- `EXCLUDED` – Customer does not satisfy one or more eligibility rules.
 
 
 
@@ -434,7 +434,7 @@ The application records exclusion reasons to support auditing and transparency.
 
 
 
-\## Project Structure
+## Project Structure
 
 
 
@@ -484,11 +484,11 @@ marketing-campaign-trigger/
 
 
 
-\*\*Note:\*\* The local `config.properties` file contains environment-specific configuration and must not be committed to GitHub.
+**Note:** The local `config.properties` file contains environment-specific configuration and must not be committed to GitHub.
 
 
 
-\## Prerequisites
+## Prerequisites
 
 
 
@@ -496,23 +496,23 @@ Install the following before running the application:
 
 
 
-\- Java 17
+- Java 17
 
-\- Anypoint Studio 7.29.1
+- Anypoint Studio 7.29.1
 
-\- Maven
+- Maven
 
-\- MySQL 8.0 or compatible TiDB database
+- MySQL 8.0 or compatible TiDB database
 
-\- Anypoint Platform account
-
-
-
-\## Local Setup and Execution
+- Anypoint Platform account
 
 
 
-\### Step 1: Clone the Repository
+## Local Setup and Execution
+
+
+
+### Step 1: Clone the Repository
 
 
 
@@ -524,7 +524,7 @@ git clone https://github.com/RekularapuMurali/marketing-multi-channel-campaign-t
 
 
 
-\### Step 2: Open the Project
+### Step 2: Open the Project
 
 
 
@@ -532,7 +532,7 @@ Import the cloned project into Anypoint Studio as an existing Mule project.
 
 
 
-\### Step 3: Configure Database and Email Properties
+### Step 3: Configure Database and Email Properties
 
 
 
@@ -554,21 +554,21 @@ Configure the following properties using your own credentials:
 
 ```properties
 
-db.host=YOUR\_DATABASE\_HOST
+db.host=YOUR_DATABASE_HOST
 
-db.port=YOUR\_DATABASE\_PORT
+db.port=YOUR_DATABASE_PORT
 
-db.user=YOUR\_DATABASE\_USERNAME
+db.user=YOUR_DATABASE_USERNAME
 
-db.password=YOUR\_DATABASE\_PASSWORD
+db.password=YOUR_DATABASE_PASSWORD
 
-db.database=marketing\_campaign
+db.database=marketing_campaign
 
 
 
-email.username=YOUR\_EMAIL\_ADDRESS
+email.username=YOUR_EMAIL_ADDRESS
 
-email.password=YOUR\_EMAIL\_APP\_PASSWORD
+email.password=YOUR_EMAIL_APP_PASSWORD
 
 ```
 
@@ -578,15 +578,15 @@ Do not upload real credentials, passwords, or private certificates to GitHub.
 
 
 
-\### Step 4: Configure the Database
+### Step 4: Configure the Database
 
 
 
-Create or import the `marketing\_campaign` database and ensure that the required tables are available.
+Create or import the `marketing_campaign` database and ensure that the required tables are available.
 
 
 
-\### Step 5: Build the Application
+### Step 5: Build the Application
 
 
 
@@ -614,7 +614,7 @@ mvn clean package -DskipMunitTests
 
 
 
-\### Step 6: Run the Application
+### Step 6: Run the Application
 
 
 
@@ -634,7 +634,7 @@ http://localhost:8081/api/v1
 
 
 
-\## Testing with PowerShell
+## Testing with PowerShell
 
 
 
@@ -658,7 +658,7 @@ $triggerUrl = "$baseUrl/api/v1/campaigns/$campaignId/trigger"
 
 
 
-\### Test 1: Retrieve Campaign Details
+### Test 1: Retrieve Campaign Details
 
 
 
@@ -666,13 +666,13 @@ $triggerUrl = "$baseUrl/api/v1/campaigns/$campaignId/trigger"
 
 Invoke-RestMethod -Uri $getUrl -Method GET |
 
-&#x20;   ConvertTo-Json -Depth 5
+    ConvertTo-Json -Depth 5
 
 ```
 
 
 
-\### Test 2: DRY\_RUN
+### Test 2: DRY_RUN
 
 
 
@@ -680,7 +680,7 @@ Invoke-RestMethod -Uri $getUrl -Method GET |
 
 $headers = @{
 
-&#x20;   "Idempotency-Key" = \[guid]::NewGuid().ToString()
+    "Idempotency-Key" = [guid]::NewGuid().ToString()
 
 }
 
@@ -688,7 +688,7 @@ $headers = @{
 
 $body = @{
 
-&#x20;   mode = "DRY\_RUN"
+    mode = "DRY_RUN"
 
 } | ConvertTo-Json
 
@@ -696,19 +696,19 @@ $body = @{
 
 Invoke-RestMethod -Uri $triggerUrl `
 
-&#x20;   -Method POST `
+    -Method POST `
 
-&#x20;   -Headers $headers `
+    -Headers $headers `
 
-&#x20;   -ContentType "application/json" `
+    -ContentType "application/json" `
 
-&#x20;   -Body $body
+    -Body $body
 
 ```
 
 
 
-\### Test 3: PREVIEW
+### Test 3: PREVIEW
 
 
 
@@ -716,7 +716,7 @@ Invoke-RestMethod -Uri $triggerUrl `
 
 $headers = @{
 
-&#x20;   "Idempotency-Key" = \[guid]::NewGuid().ToString()
+    "Idempotency-Key" = [guid]::NewGuid().ToString()
 
 }
 
@@ -724,7 +724,7 @@ $headers = @{
 
 $body = @{
 
-&#x20;   mode = "PREVIEW"
+    mode = "PREVIEW"
 
 } | ConvertTo-Json
 
@@ -732,19 +732,19 @@ $body = @{
 
 Invoke-RestMethod -Uri $triggerUrl `
 
-&#x20;   -Method POST `
+    -Method POST `
 
-&#x20;   -Headers $headers `
+    -Headers $headers `
 
-&#x20;   -ContentType "application/json" `
+    -ContentType "application/json" `
 
-&#x20;   -Body $body
+    -Body $body
 
 ```
 
 
 
-\### Test 4: EXECUTE
+### Test 4: EXECUTE
 
 
 
@@ -752,7 +752,7 @@ Invoke-RestMethod -Uri $triggerUrl `
 
 $headers = @{
 
-&#x20;   "Idempotency-Key" = \[guid]::NewGuid().ToString()
+    "Idempotency-Key" = [guid]::NewGuid().ToString()
 
 }
 
@@ -760,7 +760,7 @@ $headers = @{
 
 $body = @{
 
-&#x20;   mode = "EXECUTE"
+    mode = "EXECUTE"
 
 } | ConvertTo-Json
 
@@ -768,23 +768,23 @@ $body = @{
 
 Invoke-RestMethod -Uri $triggerUrl `
 
-&#x20;   -Method POST `
+    -Method POST `
 
-&#x20;   -Headers $headers `
+    -Headers $headers `
 
-&#x20;   -ContentType "application/json" `
+    -ContentType "application/json" `
 
-&#x20;   -Body $body
+    -Body $body
 
 ```
 
 
 
-\## Deployment
+## Deployment
 
 
 
-The application is deployed on \*\*MuleSoft CloudHub 2.0\*\*.
+The application is deployed on **MuleSoft CloudHub 2.0**.
 
 
 
@@ -808,53 +808,52 @@ Environment-specific database and email credentials should be configured through
 
 
 
-\## Future Enhancements
+## Future Enhancements
 
 
 
-\- Integrate actual SMS delivery through an SMS gateway.
+- Integrate actual SMS delivery through an SMS gateway.
 
-\- Integrate Push Notification services.
+- Integrate Push Notification services.
 
-\- Implement live customer email delivery.
+- Implement live customer email delivery.
 
-\- Add advanced campaign analytics and reporting.
+- Add advanced campaign analytics and reporting.
 
-\- Add retry mechanisms and dead-letter queue handling.
+- Add retry mechanisms and dead-letter queue handling.
 
-\- Improve monitoring, alerting, and failure recovery.
+- Improve monitoring, alerting, and failure recovery.
 
-\- Implement additional automated integration tests.
+- Implement additional automated integration tests.
 
-\- Add authentication and authorization for campaign APIs.
-
-
-
-\## Author
+- Add authentication and authorization for campaign APIs.
 
 
 
-\*\*Murali Rekularapu\*\*
+## Author
 
 
 
-BE – Information Technology  
+**Murali Rekularapu**
+
+
+
+BE – Information Technology
 
 Chaitanya Bharathi Institute of Technology (CBIT), Hyderabad
 
 
 
-GitHub: \[RekularapuMurali](https://github.com/RekularapuMurali)
+GitHub: [RekularapuMurali](https://github.com/RekularapuMurali)
 
 
 
-\---
+---
 
 
 
-\## License
+## License
 
 
 
 This project is developed for educational and demonstration purposes.
-
