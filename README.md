@@ -55,33 +55,19 @@ It supports three execution modes: `DRY_RUN`, `PREVIEW`, and `EXECUTE`.
 
 
 | Component | Technology |
-
 |---|---|
-
 | Integration Platform | MuleSoft Anypoint Platform |
-
 | Runtime | Mule Runtime 4.13.2 |
-
 | Development Environment | Anypoint Studio 7.29.1 |
-
 | Programming / Transformation | DataWeave 2.0 |
-
 | API Specification | RAML |
-
 | Database | TiDB Cloud / MySQL 8.0 |
-
 | Database Connectivity | Mule Database Connector |
-
 | Email Integration | SMTP |
-
 | Messaging | Mule VM Connector |
-
 | Build Tool | Maven |
-
 | Version Control | Git and GitHub |
-
 | Deployment | CloudHub 2.0 |
-
 
 
 ## System Architecture
