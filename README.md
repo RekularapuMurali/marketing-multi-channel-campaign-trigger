@@ -77,87 +77,48 @@ It supports three execution modes: `DRY_RUN`, `PREVIEW`, and `EXECUTE`.
 ```text
 
              Client / PowerShell
-
                      |
-
                      v
-
                HTTP Listener
-
                      |
-
                      v
-
                APIKit Router
-
                      |
-
                      v
-
             Campaign Trigger Flow
-
                      |
-
           +----------+----------+
-
           |                     |
-
           v                     v
-
     Database Layer        DataWeave
-
           |                     |
-
           v                     v
-
  Campaign / Customer     Eligibility Evaluation
 
  Consent / Suppression   Message Personalization
 
  Contact History                |
-
           |                     |
-
           +----------+----------+
-
                      |
-
                      v
-
               Execution Modes
-
                      |
-
           +----------+----------+
-
           |          |          |
-
           v          v          v
-
         DRY_RUN    PREVIEW    EXECUTE
-
                      |          |
-
                      v          v
-
                 SMTP Report  Scheduled Messages
-
                                 |
-
                                 v
-
                            Scheduler
-
                                 |
-
                                 v
-
                           Internal VM Queues
-
                                 |
-
                                 v
-
                          Queue Consumers
 
 ```
@@ -259,13 +220,9 @@ Retrieves campaign information using the campaign ID.
 
 
 | Property | Value |
-
 |---|---|
-
 | Method | GET |
-
 | Endpoint | `/api/v1/db-test/campaigns/{campaignId}` |
-
 
 
 Example:
@@ -289,15 +246,10 @@ Triggers a campaign using the selected execution mode.
 
 
 | Property | Value |
-
 |---|---|
-
 | Method | POST |
-
 | Endpoint | `/api/v1/campaigns/{campaignId}/trigger` |
-
 | Required Header | `Idempotency-Key` |
-
 | Content-Type | `application/json` |
 
 
@@ -363,27 +315,16 @@ Important tables include:
 
 
 | Table | Purpose |
-
 |---|---|
-
 | `campaigns` | Stores campaign details and approval information |
-
 | `customers` | Stores customer information |
-
 | `customer_consents` | Maintains channel-specific customer consent |
-
 | `suppression_list` | Stores customers excluded from campaigns |
-
 | `customer_contact_history` | Tracks previous customer communications |
-
 | `campaign_executions` | Maintains campaign execution records |
-
 | `campaign_recipient_log` | Records recipient eligibility decisions |
-
 | `campaign_scheduled_messages` | Stores scheduled personalized messages |
-
 | `campaign_templates` | Stores campaign message templates |
-
 | `campaign_execution_locks` | Supports execution locking |
 
 
@@ -427,43 +368,24 @@ The application records exclusion reasons to support auditing and transparency.
 ```text
 
 marketing-campaign-trigger/
-
 │
-
 ├── src/
-
 │   ├── main/
-
 │   │   ├── mule/
-
 │   │   │   └── marketing-campaign-trigger.xml
-
 │   │   │
-
 │   │   └── resources/
-
 │   │       ├── api/
-
 │   │       │   └── marketing-campaign-trigger.raml
-
 │   │       │
-
 │   │       └── config.properties
-
 │   │
-
 │   └── test/
-
 │       └── munit/
-
 │           └── marketing-campaign-trigger-test-suite.xml
-
 │
-
 ├── pom.xml
-
 ├── .gitignore
-
 └── README.md
 
 ```
@@ -773,19 +695,12 @@ Invoke-RestMethod -Uri $triggerUrl `
 The application is deployed on **MuleSoft CloudHub 2.0**.
 
 
-
 | Property | Value |
-
 |---|---|
-
 | Deployment Platform | CloudHub 2.0 |
-
 | Application Name | `marketing-campaign-trigger` |
-
 | Runtime Version | Mule Runtime 4.13.2 |
-
 | Deployment Region | US East (Ohio) |
-
 | Replicas | 1 |
 
 
